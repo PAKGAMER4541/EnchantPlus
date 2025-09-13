@@ -1,0 +1,32 @@
+name: EnchantPlus
+version: 1.0
+main: me.pakgamer5451.enchantplus.EnchantPlus
+api-version: 1.20
+
+depend:
+  - Citizens
+
+commands:
+  spawnnpc:
+    description: Spawns or removes an Enchant Master NPC
+    usage: /spawnnpc [spawn|remove]
+    aliases: [enchantnpc]
+
+  giveallenchantbooks:
+    description: Gives all custom enchantment books to the player
+    usage: /giveallenchantbooks
+
+  removenpc:
+    description: Removes the closest Enchant Master NPC
+    usage: /removenpc
+
+permissions:
+  enchantplus.spawnnpc:
+    description: Allows use of /spawnnpc
+    default: op
+  enchantplus.giveallenchantbooks:
+    description: Allows use of /giveallenchantbooks
+    default: op
+  enchantplus.removenpc:
+    description: Allows use of /removenpc
+    default: op

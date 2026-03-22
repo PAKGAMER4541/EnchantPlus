@@ -3,6 +3,7 @@ package me.pakgamer5451.enchantplus.util;
 import me.pakgamer5451.enchantplus.EnchantPlus;
 import me.pakgamer5451.enchantplus.spin.EnchantSpinManager;
 import me.pakgamer5451.enchantplus.spin.EnchantSpinManager.EnchantData;
+import me.pakgamer5451.enchantplus.spin.Rarity;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
@@ -19,6 +20,7 @@ import java.util.*;
 public class EnchantUtils {
 
     private static final NamespacedKey ENCHANT_KEY = new NamespacedKey(EnchantPlus.getInstance(), "custom_enchants");
+    private static final NamespacedKey ENCHANT_LEVELS_KEY = new NamespacedKey(EnchantPlus.getInstance(), "enchant_levels");
     private static final NamespacedKey SOULBOUND_CHARGES_KEY = new NamespacedKey(EnchantPlus.getInstance(), "soulbound_charges");
     private static final NamespacedKey ITEM_UUID_KEY = new NamespacedKey(EnchantPlus.getInstance(), "item_uuid");
 
@@ -33,9 +35,16 @@ public class EnchantUtils {
     }
 
     public static boolean isEnchantActive(Player player, ItemStack item) {
-        return player != null && item != null
-                && item.getType() != Material.AIR
-                && player.getInventory().getItemInMainHand().equals(item);
+        if (player == null || item == null || item.getType() == Material.AIR) return false;
+        String typeName = item.getType().name();
+        
+        if (typeName.contains("HELMET"))     return item.equals(player.getInventory().getHelmet());
+        if (typeName.contains("CHESTPLATE")) return item.equals(player.getInventory().getChestplate());
+        if (typeName.contains("LEGGINGS"))   return item.equals(player.getInventory().getLeggings());
+        if (typeName.contains("BOOTS"))      return item.equals(player.getInventory().getBoots());
+        
+        // Default: must be in main hand (tools, weapons)
+        return item.equals(player.getInventory().getItemInMainHand());
     }
 
     /**
@@ -99,7 +108,9 @@ public class EnchantUtils {
             for (String id : stored.split(";")) {
                 EnchantData data = EnchantSpinManager.getEnchantData(id);
                 if (data != null) {
-                    String line = "§7" + data.name + " §8[" + data.rarity + "]";
+                    int level = getEnchantLevel(item, id);
+                    String levelStr = level > 1 ? " " + toRoman(level) : "";
+                    String line = "§7" + data.name + levelStr + " §8[" + data.rarity.display() + "]";
                     if (id.equalsIgnoreCase("soulbound")) {
                         int charges = container.getOrDefault(SOULBOUND_CHARGES_KEY, PersistentDataType.INTEGER, 3);
                         line += " §7(" + charges + "x)";
@@ -112,6 +123,13 @@ public class EnchantUtils {
         // Removed the problematic lore addition for soulbound charges without enchant
         meta.setLore(lore);
         item.setItemMeta(meta);
+    }
+
+    private static String toRoman(int level) {
+        return switch (level) {
+            case 1 -> "I"; case 2 -> "II"; case 3 -> "III";
+            case 4 -> "IV"; case 5 -> "V"; default -> String.valueOf(level);
+        };
     }
 
     public static List<String> getAllEnchantIds(ItemStack item) {
@@ -136,8 +154,72 @@ public class EnchantUtils {
             container.remove(SOULBOUND_CHARGES_KEY);
         }
 
+        // Clean up level entry
+        setEnchantLevel(item, enchantId, 1);
+
         item.setItemMeta(meta);
         updateEnchantLore(item);
+    }
+
+    // Get the level of a specific enchant on an item (returns 1 if not leveled)
+    public static int getEnchantLevel(ItemStack item, String enchantId) {
+        if (item == null || item.getType() == Material.AIR || !item.hasItemMeta()) return 1;
+        PersistentDataContainer pdc = item.getItemMeta().getPersistentDataContainer();
+        String stored = pdc.get(ENCHANT_LEVELS_KEY, PersistentDataType.STRING);
+        if (stored == null || stored.isEmpty()) return 1;
+        for (String entry : stored.split(";")) {
+            String[] parts = entry.split(":");
+            if (parts.length == 2 && parts[0].equalsIgnoreCase(enchantId)) {
+                try { return Integer.parseInt(parts[1]); } catch (NumberFormatException e) { return 1; }
+            }
+        }
+        return 1;
+    }
+
+    // Set or update the level of an enchant on an item
+    public static void setEnchantLevel(ItemStack item, String enchantId, int level) {
+        if (item == null || item.getType() == Material.AIR || !item.hasItemMeta()) return;
+        ItemMeta meta = item.getItemMeta();
+        PersistentDataContainer pdc = meta.getPersistentDataContainer();
+        String stored = pdc.getOrDefault(ENCHANT_LEVELS_KEY, PersistentDataType.STRING, "");
+        
+        // Build new string, replacing existing entry if present
+        StringBuilder result = new StringBuilder();
+        boolean found = false;
+        if (!stored.isEmpty()) {
+            for (String entry : stored.split(";")) {
+                String[] parts = entry.split(":");
+                if (parts.length == 2 && parts[0].equalsIgnoreCase(enchantId)) {
+                    if (level > 1) {
+                        if (result.length() > 0) result.append(";");
+                        result.append(enchantId.toLowerCase()).append(":").append(level);
+                    }
+                    found = true;
+                } else {
+                    if (result.length() > 0) result.append(";");
+                    result.append(entry);
+                }
+            }
+        }
+        if (!found && level > 1) {
+            if (result.length() > 0) result.append(";");
+            result.append(enchantId.toLowerCase()).append(":").append(level);
+        }
+        
+        if (result.length() > 0) {
+            pdc.set(ENCHANT_LEVELS_KEY, PersistentDataType.STRING, result.toString());
+        } else {
+            pdc.remove(ENCHANT_LEVELS_KEY);
+        }
+        item.setItemMeta(meta);
+    }
+
+    // Get book level from a book ItemStack
+    public static int getBookLevel(ItemStack book) {
+        if (book == null || !book.hasItemMeta()) return 1;
+        PersistentDataContainer pdc = book.getItemMeta().getPersistentDataContainer();
+        NamespacedKey levelKey = new NamespacedKey(EnchantPlus.getInstance(), "custom_enchant_level");
+        return pdc.getOrDefault(levelKey, PersistentDataType.INTEGER, 1);
     }
 
     public static UUID getOrCreateItemUUID(ItemStack item) {
@@ -159,11 +241,5 @@ public class EnchantUtils {
 
     public static String formatEnchantDisplay(EnchantData data) {
         return data.name + " (" + data.rarity.name() + ")";
-    }
-
-    @Deprecated
-    public static String getEnchantId(ItemStack item) {
-        if (item == null || item.getType() == Material.AIR || !item.hasItemMeta()) return null;
-        return item.getItemMeta().getPersistentDataContainer().get(ENCHANT_KEY, PersistentDataType.STRING);
     }
 }

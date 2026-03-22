@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2025 PAKGAMER4541
+Copyright (c) 2026 PAKGAMER5451
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +19,25 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+## EnchantPlus Plugin Information
+- **Version**: 2.0.0
+- **Release**: Level System + Critical Bug Fixes
+- **Total Enchantments**: 22 (All with Level I-III variants)
+- **Status**: Production Ready
+- **Features**: Complete Level System, Performance Optimizations, Bug Fixes
+- **Compatibility**: PaperMC 1.20.x+
+- **Java Version**: 17+
+
+This plugin includes a comprehensive enchantment system with:
+- 22 unique enchantments across 5 rarity tiers
+- Level I-III progression system for all enchantments
+- Performance-optimized async operations
+- Thread-safe data structures
+- Memory leak prevention
+- Comprehensive bug fixes
+- Production-ready stability
+
+For detailed documentation, see EnchantPlus-Guide.md

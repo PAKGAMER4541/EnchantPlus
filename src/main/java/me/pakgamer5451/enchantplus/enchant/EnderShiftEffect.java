@@ -16,10 +16,14 @@ import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 public class EnderShiftEffect implements Listener {
 
-    private static final Map<String, Location> lastDeathLocations = new HashMap<>();
+    private record DeathRecord(Location location, long timestamp) {}
+    
+    private static final Map<UUID, DeathRecord> lastDeathLocations = new HashMap<>();
+    private static final long EXPIRY_MS = 30 * 60 * 1000L; // 30 minutes
     private final JavaPlugin plugin;
 
     public EnderShiftEffect(JavaPlugin plugin) {
@@ -29,7 +33,7 @@ public class EnderShiftEffect implements Listener {
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
         Player player = event.getEntity();
-        lastDeathLocations.put(player.getName(), player.getLocation());
+        lastDeathLocations.put(player.getUniqueId(), new DeathRecord(player.getLocation(), System.currentTimeMillis()));
     }
 
     @EventHandler
@@ -41,28 +45,36 @@ public class EnderShiftEffect implements Listener {
         if (!EnchantUtils.hasEnchant(item, "ender_shift")) return;
         if (!EnchantUtils.isEnchantActive(player, item)) return;
 
-        // Left click only
+        // Right click only
         Action action = event.getAction();
-        if (!(action == Action.LEFT_CLICK_AIR || action == Action.LEFT_CLICK_BLOCK)) return;
+        if (!(action == Action.RIGHT_CLICK_AIR || action == Action.RIGHT_CLICK_BLOCK)) return;
 
-        Location deathLocation = lastDeathLocations.get(player.getName());
-        if (deathLocation == null) {
+        DeathRecord record = lastDeathLocations.get(player.getUniqueId());
+        if (record == null) {
             ActionBarUtil.send(player, "§cNo previous death location saved.");
             return;
         }
+        
+        if (System.currentTimeMillis() - record.timestamp() > EXPIRY_MS) {
+            lastDeathLocations.remove(player.getUniqueId());
+            ActionBarUtil.send(player, "§cDeath location expired (30 minute limit).");
+            return;
+        }
+        
+        Location location = record.location();
 
-        World deathWorld = Bukkit.getWorld(deathLocation.getWorld().getName());
+        World deathWorld = Bukkit.getWorld(location.getWorld().getName());
         if (deathWorld == null) {
             ActionBarUtil.send(player, "§cError: Death world not found.");
             return;
         }
 
-        if (deathWorld.getEnvironment() == World.Environment.THE_END && deathLocation.getY() <= 0) {
+        if (deathWorld.getEnvironment() == World.Environment.THE_END && location.getY() <= 0) {
             ActionBarUtil.send(player, "§cCannot teleport: death location was in the void.");
             return;
         }
 
-        Location safeLoc = findSafeLocationNear(deathLocation, 3, 64); // radius 3, depth 64
+        Location safeLoc = findSafeLocationNear(location, 3, 64); // radius 3, depth 64
         if (safeLoc == null) {
             ActionBarUtil.send(player, "§cCannot teleport: no nearby safe ground found.");
             return;
@@ -74,7 +86,7 @@ public class EnderShiftEffect implements Listener {
         player.playSound(safeLoc, Sound.ENTITY_ENDERMAN_TELEPORT, 1, 1);
         ActionBarUtil.send(player, "§bEnder Shift teleported you to your last death location!");
 
-        lastDeathLocations.remove(player.getName());
+        lastDeathLocations.remove(player.getUniqueId());
         item.setAmount(0); // Consume the compass
 
         // Remove invincibility after 5 seconds
@@ -112,5 +124,9 @@ public class EnderShiftEffect implements Listener {
         }
 
         return null; // no safe spot found
+    }
+
+    public static void clearDeathLocation(UUID uuid) {
+        lastDeathLocations.remove(uuid);
     }
 }

@@ -1,20 +1,16 @@
 package me.pakgamer5451.enchantplus;
 
-import me.pakgamer5451.enchantplus.command.GiveAllBooksCommand;
-import me.pakgamer5451.enchantplus.command.RemoveNPCCommand;
-import me.pakgamer5451.enchantplus.command.SpawnNPCCommand;
+import me.pakgamer5451.enchantplus.command.*;
 import me.pakgamer5451.enchantplus.enchant.*;
 import me.pakgamer5451.enchantplus.gui.EnchantGalleryGUI;
 import me.pakgamer5451.enchantplus.gui.MainMenuGUI;
 import me.pakgamer5451.enchantplus.gui.SpinMenuGUI;
-import me.pakgamer5451.enchantplus.listener.GUIListener;
+import me.pakgamer5451.enchantplus.listener.GalaxyEnchanterListener;
 import me.pakgamer5451.enchantplus.listener.InventoryClickListener;
-import me.pakgamer5451.enchantplus.listener.NPCInteractListener;
-import me.pakgamer5451.enchantplus.npc.EnchantMasterTrait;
+import me.pakgamer5451.enchantplus.listener.PlayerPlacedBlockTracker;
+import me.pakgamer5451.enchantplus.listener.PlayerQuitListener;
+import me.pakgamer5451.enchantplus.npc.GalaxyEnchanterManager;
 import me.pakgamer5451.enchantplus.util.EnchantUtils;
-
-import net.citizensnpcs.api.CitizensAPI;
-import net.citizensnpcs.api.trait.TraitInfo;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -24,45 +20,44 @@ import org.bukkit.plugin.java.JavaPlugin;
 public class EnchantPlus extends JavaPlugin {
 
     private static EnchantPlus instance;
+    private GalaxyEnchanterManager npcManager;
+    private NetherstrideEffect netherstrideEffect;
 
     @Override
     public void onEnable() {
         instance = this;
         saveDefaultConfig();
 
-        // Register Citizens trait
-        if (Bukkit.getPluginManager().isPluginEnabled("Citizens")) {
-            CitizensAPI.getTraitFactory().registerTrait(
-                TraitInfo.create(EnchantMasterTrait.class).withName("enchantmaster")
-            );
-            getLogger().info("[EnchantPlus] EnchantMasterTrait registered with Citizens.");
-        } else {
-            getLogger().severe("[EnchantPlus] Citizens plugin not found! NPCs will not function.");
-        }
+        // Initialize FancyNpcs-based NPC Manager
+        npcManager = new GalaxyEnchanterManager(this);
+        npcManager.init();
+        getServer().getPluginManager().registerEvents(new GalaxyEnchanterListener(this, npcManager), this);
 
         // Register commands
-        if (getCommand("spawnnpc") != null)
-            getCommand("spawnnpc").setExecutor(new SpawnNPCCommand(this));
-        if (getCommand("removenpc") != null)
-            getCommand("removenpc").setExecutor(new RemoveNPCCommand());
+        if (getCommand("spawnenchanter") != null)
+            getCommand("spawnenchanter").setExecutor(new SpawnGalaxyEnchanterCommand(this, npcManager));
+        if (getCommand("removeenchanter") != null)
+            getCommand("removeenchanter").setExecutor(new RemoveGalaxyEnchanterCommand(this, npcManager));
         if (getCommand("giveallenchantbooks") != null)
-            getCommand("giveallenchantbooks").setExecutor(new GiveAllBooksCommand());
+            getCommand("giveallenchantbooks").setExecutor(new GiveAllBooksCommand(this));
 
         // Register GUI + listeners
-        getServer().getPluginManager().registerEvents(new GUIListener(), this);
         getServer().getPluginManager().registerEvents(new InventoryClickListener(), this);
         getServer().getPluginManager().registerEvents(new MainMenuGUI(), this);
         getServer().getPluginManager().registerEvents(new SpinMenuGUI(), this);
         getServer().getPluginManager().registerEvents(new EnchantGalleryGUI(), this);
+        getServer().getPluginManager().registerEvents(new PlayerQuitListener(), this);
 
         // Register enchant effect listeners
+        getServer().getPluginManager().registerEvents(new PlayerPlacedBlockTracker(), this);
         getServer().getPluginManager().registerEvents(new BlazingAuraEffect(), this);
         getServer().getPluginManager().registerEvents(new EnderShiftEffect(this), this);
         getServer().getPluginManager().registerEvents(new FlameKingEffect(), this);
         getServer().getPluginManager().registerEvents(new ForgeTouchEffect(), this);
         getServer().getPluginManager().registerEvents(new FrostbiteEffect(), this);
         getServer().getPluginManager().registerEvents(new MidasTouchEffect(), this);
-        getServer().getPluginManager().registerEvents(new NetherstrideEffect(), this);
+        netherstrideEffect = new NetherstrideEffect();
+        getServer().getPluginManager().registerEvents(netherstrideEffect, this);
         getServer().getPluginManager().registerEvents(new SoulSiphonEffect(), this);
         getServer().getPluginManager().registerEvents(new SoulboundEffect(), this);
         getServer().getPluginManager().registerEvents(new TerraformerEffect(), this);
@@ -70,6 +65,17 @@ public class EnchantPlus extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new TimberfallEffect(), this);
         getServer().getPluginManager().registerEvents(new VoidStrikeEffect(), this);
         getServer().getPluginManager().registerEvents(new PhoenixAuraEffect(), this);
+        getServer().getPluginManager().registerEvents(new InfernoCoreEffect(), this);
+
+        // Register new enchant effects
+        getServer().getPluginManager().registerEvents(new AutoReplantEffect(), this);
+        getServer().getPluginManager().registerEvents(new AnglerEffect(), this);
+        getServer().getPluginManager().registerEvents(new VillagersDealEffect(), this);
+        getServer().getPluginManager().registerEvents(new FarmerBeesEffect(), this);
+
+        // Load PlayerPlacedBlockTracker data
+        PlayerPlacedBlockTracker.load();
+        PlayerPlacedBlockTracker.startAutoSave();
 
         // Update PhoenixAura lore on startup
         for (Player player : Bukkit.getOnlinePlayers()) {
@@ -79,17 +85,23 @@ public class EnchantPlus extends JavaPlugin {
             }
         }
 
-        // Register NPC interact listener after Citizens is ready
-        getServer().getScheduler().runTaskLater(this, () -> {
-            getServer().getPluginManager().registerEvents(new NPCInteractListener(), this);
-            getLogger().info("[EnchantPlus] NPCInteractListener registered.");
-        }, 20L);
-
+        getLogger().info("[EnchantPlus] Simplified NMS-based Galaxy Enchanter system enabled successfully.");
         getLogger().info("[EnchantPlus] Plugin enabled successfully.");
     }
 
     @Override
     public void onDisable() {
+        if (npcManager != null) {
+            npcManager.removeAll();
+        }
+        if (netherstrideEffect != null) {
+            netherstrideEffect.cleanup();
+        }
+        // Clean up Farmer Bees tasks and entities
+        FarmerBeesEffect.cleanupAll();
+        // Save PlayerPlacedBlockTracker data
+        PlayerPlacedBlockTracker.save();
+        getLogger().info("[EnchantPlus] All Galaxy Enchanter NPCs removed.");
         getLogger().info("[EnchantPlus] Plugin disabled.");
     }
 

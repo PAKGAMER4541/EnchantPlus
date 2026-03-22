@@ -25,7 +25,7 @@ public class VoidStrikeEffect implements Listener {
         if (!isVoidEntity(target)) return;
 
         ItemStack weapon = player.getInventory().getItemInMainHand();
-        if (weapon == null || !EnchantUtils.hasEnchant(weapon, "voidstrike")) return;
+        if (weapon == null || !EnchantUtils.hasEnchant(weapon, "void_strike")) return;
         if (!EnchantUtils.isEnchantActive(player, weapon)) return;
 
         if (RANDOM.nextDouble() < ACTIVATION_CHANCE) {

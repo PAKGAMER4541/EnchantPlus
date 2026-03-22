@@ -1,0 +1,237 @@
+package me.pakgamer5451.enchantplus.enchant;
+
+import me.pakgamer5451.enchantplus.EnchantPlus;
+import me.pakgamer5451.enchantplus.util.EnchantUtils;
+import org.bukkit.Bukkit;
+import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.entity.ThrownPotion;
+import org.bukkit.entity.Villager;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.entity.ProjectileHitEvent;
+import org.bukkit.event.inventory.BrewEvent;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.MerchantRecipe;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.scheduler.BukkitRunnable;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+public class VillagersDealEffect implements Listener {
+
+    private static final Map<UUID, Long> discountedVillagers = new HashMap<>();
+    private static final NamespacedKey DISCOUNT_KEY = new NamespacedKey(EnchantPlus.getInstance(), "villagers_deal_discount");
+    private static final NamespacedKey LOCKED_KEY = new NamespacedKey(EnchantPlus.getInstance(), "villagers_deal_locked");
+    private static final NamespacedKey START_TIME_KEY = new NamespacedKey(EnchantPlus.getInstance(), "villagers_deal_start_time");
+
+    public VillagersDealEffect() {
+        // Startup recovery for existing discounted villagers
+        recoverDiscountedVillagers();
+    }
+
+    private void recoverDiscountedVillagers() {
+        for (org.bukkit.World world : Bukkit.getWorlds()) {
+            for (org.bukkit.entity.Entity entity : world.getEntities()) {
+                if (entity instanceof Villager villager) {
+                    PersistentDataContainer pdc = villager.getPersistentDataContainer();
+                    if (pdc.has(DISCOUNT_KEY, PersistentDataType.STRING)) {
+                        Long startTime = pdc.get(START_TIME_KEY, PersistentDataType.LONG);
+                        if (startTime != null) {
+                            long elapsed = System.currentTimeMillis() - startTime;
+                            long remaining = 30 * 60 * 1000 - elapsed; // 30 minutes in millis
+                            
+                            if (remaining > 0) {
+                                // Villager still has active discount
+                                discountedVillagers.put(villager.getUniqueId(), startTime);
+                                int minutesLeft = (int) (remaining / (60 * 1000));
+                                villager.setCustomName("§a-50% §7| §e" + minutesLeft + ":00");
+                                villager.setCustomNameVisible(true);
+                                
+                                // Restart countdown timer
+                                restartCountdownTimer(villager, minutesLeft);
+                            } else {
+                                // Discount expired, restore prices
+                                restoreDiscount(villager);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private void restartCountdownTimer(Villager villager, int minutesLeft) {
+        new BukkitRunnable() {
+            int minutes = minutesLeft - 1;
+            
+            @Override
+            public void run() {
+                if (!villager.isValid() || minutes <= 0) {
+                    restoreDiscount(villager);
+                    cancel();
+                    return;
+                }
+                villager.setCustomName("§a-50% §7| §e" + minutes + ":00");
+                minutes--;
+            }
+        }.runTaskTimer(EnchantPlus.getInstance(), 0L, 1200L); // every 60 seconds
+    }
+
+    @EventHandler
+    public void onPotionLand(ProjectileHitEvent event) {
+        if (!(event.getEntity() instanceof ThrownPotion potion)) return;
+
+        ItemStack item = potion.getItem();
+        if (!EnchantUtils.hasEnchant(item, "villagers_deal")) return;
+
+        // Check a villager was hit
+        if (event.getHitEntity() == null || !(event.getHitEntity() instanceof Villager villager)) {
+            // No villager hit — do NOT consume the potion (cancel consumption)
+            // Unfortunately ThrownPotion can't easily be cancelled at this point;
+            // just do nothing — the potion still breaks but has no effect
+            return;
+        }
+
+        // Apply discount for 30 minutes
+        applyDiscount(villager);
+    }
+
+    @EventHandler
+    public void onBrew(BrewEvent event) {
+        // Block brewing if any ingredient has villagers_deal_locked
+        for (ItemStack ingredient : event.getContents().getContents()) {
+            if (ingredient != null && ingredient.hasItemMeta()) {
+                ItemMeta meta = ingredient.getItemMeta();
+                PersistentDataContainer pdc = meta.getPersistentDataContainer();
+                if (pdc.has(LOCKED_KEY, PersistentDataType.BYTE)) {
+                    event.setCancelled(true);
+                    return;
+                }
+            }
+        }
+    }
+
+    private void applyDiscount(Villager villager) {
+        // Check if already discounted
+        if (discountedVillagers.containsKey(villager.getUniqueId())) return;
+
+        discountedVillagers.put(villager.getUniqueId(), System.currentTimeMillis());
+
+        // Store original prices before modifying
+        storeOriginalPrices(villager);
+        
+        // Store start time for recovery
+        long startTime = System.currentTimeMillis();
+        PersistentDataContainer pdc = villager.getPersistentDataContainer();
+        pdc.set(START_TIME_KEY, PersistentDataType.LONG, startTime);
+
+        // Reduce all recipe prices by 50%, floor at 5 emeralds
+        List<MerchantRecipe> recipes = villager.getRecipes(); // store once
+        for (MerchantRecipe recipe : recipes) {
+            List<ItemStack> ingredients = new ArrayList<>(recipe.getIngredients());
+            if (!ingredients.isEmpty()) {
+                ItemStack ingredient = ingredients.get(0);
+                if (ingredient.getType() == Material.EMERALD) {
+                    int original = ingredient.getAmount();
+                    int discounted = Math.max(5, (int) Math.ceil(original * 0.5));
+                    ingredient.setAmount(discounted);
+                    ingredients.set(0, ingredient);
+                    recipe.setIngredients(ingredients);
+                }
+            }
+        }
+        villager.setRecipes(recipes); // pass the SAME list
+
+        // Floating text above villager using display name temporarily
+        villager.setCustomName("§a-50% §7| §e30:00");
+        villager.setCustomNameVisible(true);
+
+        // Countdown timer updating every 60 seconds, remove after 30 mins
+        new BukkitRunnable() {
+            int minutesLeft = 29;
+            @Override
+            public void run() {
+                if (!villager.isValid() || minutesLeft <= 0) {
+                    // Restore prices
+                    restoreDiscount(villager);
+                    cancel();
+                    return;
+                }
+                villager.setCustomName("§a-50% §7| §e" + minutesLeft + ":00");
+                minutesLeft--;
+            }
+        }.runTaskTimer(EnchantPlus.getInstance(), 1200L, 1200L); // every 60 seconds
+    }
+
+    private void storeOriginalPrices(Villager villager) {
+        PersistentDataContainer pdc = villager.getPersistentDataContainer();
+        StringBuilder prices = new StringBuilder();
+        
+        for (MerchantRecipe recipe : villager.getRecipes()) {
+            List<ItemStack> ingredients = recipe.getIngredients();
+            if (!ingredients.isEmpty()) {
+                ItemStack ingredient = ingredients.get(0);
+                if (ingredient.getType() == Material.EMERALD) {
+                    if (prices.length() > 0) prices.append(",");
+                    prices.append(ingredient.getAmount());
+                }
+            }
+        }
+        
+        pdc.set(DISCOUNT_KEY, PersistentDataType.STRING, prices.toString());
+    }
+
+    private void restoreDiscount(Villager villager) {
+        discountedVillagers.remove(villager.getUniqueId());
+        villager.setCustomName(null);
+        villager.setCustomNameVisible(false);
+        
+        // Restore original prices from PDC
+        PersistentDataContainer pdc = villager.getPersistentDataContainer();
+        String pricesStr = pdc.get(DISCOUNT_KEY, PersistentDataType.STRING);
+        if (pricesStr != null) {
+            String[] prices = pricesStr.split(",");
+            List<MerchantRecipe> recipes = villager.getRecipes();
+            int priceIndex = 0;
+            
+            for (MerchantRecipe recipe : recipes) {
+                List<ItemStack> ingredients = new ArrayList<>(recipe.getIngredients());
+                if (!ingredients.isEmpty() && priceIndex < prices.length) {
+                    ItemStack ingredient = ingredients.get(0);
+                    if (ingredient.getType() == Material.EMERALD) {
+                        try {
+                            int originalPrice = Integer.parseInt(prices[priceIndex]);
+                            ingredient.setAmount(originalPrice);
+                            ingredients.set(0, ingredient);
+                            recipe.setIngredients(ingredients);
+                            priceIndex++;
+                        } catch (NumberFormatException e) {
+                            // Skip invalid price data
+                        }
+                    }
+                }
+            }
+            
+            villager.setRecipes(recipes);
+            pdc.remove(DISCOUNT_KEY);
+            pdc.remove(START_TIME_KEY);
+        }
+    }
+
+    // Static method to lock potions when enchant is applied
+    public static void lockPotion(ItemStack potion) {
+        ItemMeta meta = potion.getItemMeta();
+        if (meta != null) {
+            PersistentDataContainer pdc = meta.getPersistentDataContainer();
+            pdc.set(LOCKED_KEY, PersistentDataType.BYTE, (byte) 1);
+            potion.setItemMeta(meta);
+        }
+    }
+}

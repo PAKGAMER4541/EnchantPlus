@@ -9,6 +9,7 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.event.Listener;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.potion.PotionEffect;
@@ -30,13 +31,30 @@ public class FrostbiteEffect implements Listener {
         if (!EnchantUtils.hasEnchant(weapon, "frostbite")) return;
         if (!EnchantUtils.isEnchantActive(player, weapon)) return;
 
-        if (random.nextDouble() < 0.25) {
-            // Apply Slowness IV for 5 seconds
-            target.addPotionEffect(new PotionEffect(PotionEffectType.SLOW, 100, 3));
+        // Get level for branching behavior
+        int level = EnchantUtils.getEnchantLevel(weapon, "frostbite");
+        
+        double chance = switch (level) { case 2 -> 0.35; case 3 -> 0.35; default -> 0.25; };
+
+        if (random.nextDouble() < chance) {
+            // Base: always apply Slowness
+            int slownessAmplifier = (level == 3) ? 4 : 3; // Slowness V vs IV (amplifier = level - 1)
+            target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 100, slownessAmplifier));
+            
+            // Level II+: add Weakness I
+            if (level >= 2) {
+                int weaknessAmplifier = (level == 3) ? 1 : 0; // Weakness II vs I
+                target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 100, weaknessAmplifier));
+            }
+            
+            // Level III: add Mining Fatigue I
+            if (level == 3) {
+                target.addPotionEffect(new PotionEffect(PotionEffectType.MINING_FATIGUE, 100, 0));
+            }
 
             // Mark entity with metadata
             target.setMetadata("frostbite_slowness", new FixedMetadataValue(
-                player.getServer().getPluginManager().getPlugin("EnchantPlus"), player.getName())
+                player.getServer().getPluginManager().getPlugin("EnchantPlus"), player.getUniqueId().toString())
             );
 
             // Visual: Snowflake burst
@@ -45,8 +63,22 @@ public class FrostbiteEffect implements Listener {
             // Audio: Glass breaking (chilling feedback)
             target.getWorld().playSound(target.getLocation(), Sound.BLOCK_GLASS_BREAK, 1f, 0.5f);
 
-            // Notify player
-            ActionBarUtil.send(player, "§bFrostbite §8» §fSlowness IV applied!");
+            // Notify player with level-specific message
+            String message = switch (level) {
+                case 3 -> "§bFrostbite III §8» §fSlowness V + Weakness II + Mining Fatigue I applied!";
+                case 2 -> "§bFrostbite II §8» §fSlowness IV + Weakness I applied!";
+                default -> "§bFrostbite §8» §fSlowness IV applied!";
+            };
+            ActionBarUtil.send(player, message);
+        }
+    }
+
+    @EventHandler
+    public void onEntityDeath(EntityDeathEvent event) {
+        LivingEntity entity = event.getEntity();
+        if (entity.hasMetadata("frostbite_slowness")) {
+            entity.removeMetadata("frostbite_slowness",
+                entity.getServer().getPluginManager().getPlugin("EnchantPlus"));
         }
     }
 }

@@ -1,0 +1,16 @@
+enchantments:
+  soulbound:
+    chance: 25
+    description: "Keeps your item after death"
+  midastouch:
+    chance: 10
+    description: "Turns killed mobs into gold"
+  timberfall:
+    enabled: true
+    description: "Chop trees with one break"
+  photosynthesis:
+    enabled: true
+    description: "Heal in sunlight"
+  thunderlord:
+    chance: 15
+    description: "Summon lightning on crit"

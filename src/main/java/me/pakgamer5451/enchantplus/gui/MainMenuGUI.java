@@ -48,7 +48,7 @@ public class MainMenuGUI implements Listener {
     }
     case "§aView Enchants" -> {
     player.closeInventory();
-    EnchantGalleryGUI.open(player);
+    EnchantGalleryGUI.openGallery(player);
 }
 
     case "§eXP Info" -> player.sendMessage("§7XP required depends on rarity tier.");

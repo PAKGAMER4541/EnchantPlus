@@ -1,11 +1,11 @@
 package me.pakgamer5451.enchantplus.util;
 
-import net.md_5.bungee.api.ChatMessageType;
-import net.md_5.bungee.api.chat.TextComponent;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.entity.Player;
 
 public class ActionBarUtil {
     public static void send(Player player, String message) {
-        player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent(message));
+        player.sendActionBar(LegacyComponentSerializer.legacySection().deserialize(message));
     }
 }

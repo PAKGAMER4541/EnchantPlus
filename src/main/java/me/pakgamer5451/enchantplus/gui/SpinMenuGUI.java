@@ -2,7 +2,7 @@ package me.pakgamer5451.enchantplus.gui;
 
 import me.pakgamer5451.enchantplus.EnchantPlus;
 import me.pakgamer5451.enchantplus.spin.EnchantSpinManager;
-import me.pakgamer5451.enchantplus.spin.EnchantSpinManager.Rarity;
+import me.pakgamer5451.enchantplus.spin.Rarity;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
@@ -22,16 +22,8 @@ public class SpinMenuGUI implements Listener {
     private static final String GUI_TITLE = ChatColor.DARK_PURPLE + "Enchant Spin Menu";
     private static final String SPIN_TITLE = ChatColor.GOLD + "Spinning...";
     private static final Map<Integer, Rarity> slotToRarity = new HashMap<>();
-    private static final Map<Rarity, Integer> rarityXpCost = new HashMap<>();
     private static final Set<UUID> spinningPlayers = new HashSet<>();
 
-    static {
-        rarityXpCost.put(Rarity.COMMON, 20);
-        rarityXpCost.put(Rarity.RARE, 30);
-        rarityXpCost.put(Rarity.EPIC, 40);
-        rarityXpCost.put(Rarity.LEGENDARY, 60);
-        rarityXpCost.put(Rarity.MYTHIC, 80);
-    }
 
     public static void open(Player player) {
         Inventory gui = Bukkit.createInventory(null, 27, GUI_TITLE);
@@ -52,7 +44,7 @@ public class SpinMenuGUI implements Listener {
         meta.setLore(List.of(
                 ChatColor.GRAY + "Click to spin for a",
                 ChatColor.LIGHT_PURPLE + rarity.name() + ChatColor.GRAY + " enchantment.",
-                ChatColor.YELLOW + "Cost: " + rarityXpCost.get(rarity) + " XP Levels"
+                ChatColor.YELLOW + "Cost: " + rarity.xpCost + " XP Levels"
         ));
         item.setItemMeta(meta);
         gui.setItem(slot, item);
@@ -77,7 +69,7 @@ public class SpinMenuGUI implements Listener {
         if (!slotToRarity.containsKey(slot)) return;
 
         Rarity rarity = slotToRarity.get(slot);
-        int xpCost = rarityXpCost.get(rarity);
+        int xpCost = rarity.xpCost;
 
         if (spinningPlayers.contains(player.getUniqueId())) {
             player.sendMessage(ChatColor.RED + "You are already spinning!");
@@ -90,13 +82,13 @@ public class SpinMenuGUI implements Listener {
             return;
         }
 
+        spinningPlayers.add(player.getUniqueId());  // lock BEFORE taking XP
         player.setLevel(player.getLevel() - xpCost);
         startSpin(player, rarity);
     }
 
     public static void startSpin(Player player, Rarity rarity) {
         Inventory spinGui = Bukkit.createInventory(null, 27, SPIN_TITLE);
-        spinningPlayers.add(player.getUniqueId());
 
         ItemStack filler = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
         ItemMeta fillerMeta = filler.getItemMeta();
@@ -152,11 +144,16 @@ public class SpinMenuGUI implements Listener {
                                 player.sendMessage("§cYou spun the wheel but got nothing!");
                                 player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
                             } else {
-                                player.getInventory().addItem(reward);
+                                // Handle inventory overflow to prevent data loss
+                                java.util.Map<Integer, ItemStack> leftover = player.getInventory().addItem(reward);
+                                for (ItemStack item : leftover.values()) {
+                                    player.getWorld().dropItemNaturally(player.getLocation(), item);
+                                    player.sendMessage("§eYour inventory was full — book dropped at your feet!");
+                                }
                                 player.sendMessage("§aYou won: §e" + reward.getItemMeta().getDisplayName());
                                 player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1f, 1.5f);
 
-                                if (rarity == Rarity.LEGENDARY || rarity == Rarity.MYTHIC) {
+                                if (rarity.broadcastOnWin) {
                                     Bukkit.broadcastMessage(ChatColor.LIGHT_PURPLE + player.getName() +
                                             " has won a " + rarity.name() + " enchant: §e" +
                                             reward.getItemMeta().getDisplayName() + ChatColor.LIGHT_PURPLE + "!");
@@ -175,5 +172,9 @@ public class SpinMenuGUI implements Listener {
 
     public static boolean isSpinning(Player player) {
         return spinningPlayers.contains(player.getUniqueId());
+    }
+
+    public static void clearSpinning(UUID uuid) {
+        spinningPlayers.remove(uuid);
     }
 }

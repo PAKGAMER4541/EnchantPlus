@@ -20,7 +20,7 @@ public class SoulboundEffect implements Listener {
 
     private static final NamespacedKey CHARGES_KEY = new NamespacedKey(EnchantPlus.getInstance(), "soulbound_charges");
     private static final String SOULBOUND_ID = "soulbound";
-    private final Map<UUID, List<ItemStack>> savedSoulboundItems = new HashMap<>();
+    private static final Map<UUID, List<ItemStack>> savedSoulboundItems = new HashMap<>();
 
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
@@ -73,7 +73,6 @@ public class SoulboundEffect implements Listener {
         }
     }
 
-    // Rest of the class remains unchanged
     @EventHandler
     public void onPlayerRespawn(PlayerRespawnEvent event) {
         Player player = event.getPlayer();
@@ -82,7 +81,10 @@ public class SoulboundEffect implements Listener {
         List<ItemStack> items = savedSoulboundItems.remove(uuid);
         if (items != null) {
             for (ItemStack item : items) {
-                player.getInventory().addItem(item);
+                Map<Integer, ItemStack> leftover = player.getInventory().addItem(item);
+                for (ItemStack overflow : leftover.values()) {
+                    player.getWorld().dropItemNaturally(player.getLocation(), overflow);
+                }
             }
             player.sendMessage(ChatColor.GOLD + "§eYour soulbound items have been returned to you.");
         }
@@ -116,5 +118,10 @@ public class SoulboundEffect implements Listener {
         ItemMeta meta = item.getItemMeta();
         PersistentDataContainer container = meta.getPersistentDataContainer();
         return container.getOrDefault(CHARGES_KEY, PersistentDataType.INTEGER, 0);
+    }
+
+    // Add this static method so the quit listener can call it
+    public static void clearSavedItems(UUID uuid) {
+        savedSoulboundItems.remove(uuid);
     }
 }

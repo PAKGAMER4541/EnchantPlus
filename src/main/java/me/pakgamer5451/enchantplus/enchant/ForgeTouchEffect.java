@@ -50,26 +50,34 @@ public class ForgeTouchEffect implements Listener {
         Material type = block.getType();
         if (!smeltMap.containsKey(type)) return;
 
+        // Get level for branching behavior
+        int level = EnchantUtils.getEnchantLevel(tool, "forge_touch");
+
         event.setDropItems(false); // Cancel default drops
 
         Material smeltedType = smeltMap.get(type);
         int amount = 1;
 
         // Apply Fortune
-        if (tool.containsEnchantment(Enchantment.LOOT_BONUS_BLOCKS)) {
-            int level = tool.getEnchantmentLevel(Enchantment.LOOT_BONUS_BLOCKS);
-            amount += new Random().nextInt(level + 1);
+        if (tool.containsEnchantment(Enchantment.FORTUNE)) {
+            int fortuneLevel = tool.getEnchantmentLevel(Enchantment.FORTUNE);
+            amount += new Random().nextInt(fortuneLevel + 1);
         }
 
         ItemStack result = new ItemStack(smeltedType, amount);
 
-        // Try to add to inventory, drop if full
-        PlayerInventory inv = player.getInventory();
-        HashMap<Integer, ItemStack> leftover = inv.addItem(result);
-        for (ItemStack item : leftover.values()) {
-            block.getWorld().dropItemNaturally(block.getLocation(), item);
+        if (level >= 2) {
+            // Level II: direct to inventory
+            PlayerInventory inv = player.getInventory();
+            HashMap<Integer, ItemStack> leftover = inv.addItem(result);
+            for (ItemStack item : leftover.values()) {
+                block.getWorld().dropItemNaturally(block.getLocation(), item);
+            }
+            ActionBarUtil.send(player, "§6Forge Touch §8» §fSmelted and sent to inventory!");
+        } else {
+            // Level I: drop on ground
+            block.getWorld().dropItemNaturally(block.getLocation(), result);
+            ActionBarUtil.send(player, "§6Forge Touch §8» §fOre smelted!");
         }
-
-        ActionBarUtil.send(player, "§6Forge Touch smelted the ore into your inventory!");
     }
 }

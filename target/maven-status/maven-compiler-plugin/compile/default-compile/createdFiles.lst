@@ -47,6 +47,7 @@ me\pakgamer5451\enchantplus\listener\PlayerPlacedBlockTracker.class
 me\pakgamer5451\enchantplus\enchant\SoulboundEffect.class
 me\pakgamer5451\enchantplus\command\RemoveGalaxyEnchanterCommand.class
 me\pakgamer5451\enchantplus\listener\InventoryClickListener.class
+me\pakgamer5451\enchantplus\listener\AnvilCombineListener.class
 me\pakgamer5451\enchantplus\enchant\EnderShiftEffect.class
 me\pakgamer5451\enchantplus\spin\EnchantSpinManager.class
 me\pakgamer5451\enchantplus\enchant\InfernoCoreEffect$1.class

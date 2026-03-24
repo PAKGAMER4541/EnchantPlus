@@ -67,15 +67,15 @@ public class ForgeTouchEffect implements Listener {
         ItemStack result = new ItemStack(smeltedType, amount);
 
         if (level >= 2) {
-            // Level II: direct to inventory
+            // Direct to inventory
             PlayerInventory inv = player.getInventory();
             HashMap<Integer, ItemStack> leftover = inv.addItem(result);
             for (ItemStack item : leftover.values()) {
-                block.getWorld().dropItemNaturally(block.getLocation(), item);
+                player.getWorld().dropItemNaturally(player.getLocation(), item);
             }
             ActionBarUtil.send(player, "§6Forge Touch §8» §fSmelted and sent to inventory!");
         } else {
-            // Level I: drop on ground
+            // Drop on ground
             block.getWorld().dropItemNaturally(block.getLocation(), result);
             ActionBarUtil.send(player, "§6Forge Touch §8» §fOre smelted!");
         }

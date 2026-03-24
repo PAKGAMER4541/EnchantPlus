@@ -57,6 +57,32 @@ public class EnchantSpinManager {
 
     private static final Map<Rarity, List<EnchantData>> enchantPool = new HashMap<>();
     private static final Map<String, EnchantData> enchantMap = new HashMap<>();
+    private static final Random rand = new Random();
+
+    // Enchant level distribution sets
+    private static final Set<String> singleLevelEnchants = Set.of(
+        "auto_replant", "villagers_deal", "timberfall", "terraformer",
+        "void_strike", "thunderlord", "soulbound", "ender_shift"
+    );
+    
+    private static final Set<String> twoLevelEnchants = Set.of("forge_touch");
+
+    public static int rollLevel(EnchantData data) {
+        // Enchants with no level system always give level 1
+        if (singleLevelEnchants.contains(data.id)) return 1;
+        
+        // Enchants with only 2 levels
+        if (twoLevelEnchants.contains(data.id)) {
+            // 65% Level I, 35% Level II
+            return rand.nextDouble() < 0.65 ? 1 : 2;
+        }
+        
+        // 3-level enchants: 50% I, 35% II, 15% III
+        double roll = rand.nextDouble();
+        if (roll < 0.50) return 1;
+        if (roll < 0.85) return 2;
+        return 3;
+    }
 
     static {
         for (Rarity r : Rarity.values()) {
@@ -130,15 +156,15 @@ public class EnchantSpinManager {
 
         player.setLevel(player.getLevel() - xpCost);
         EnchantData selected = rollEnchant(tier);
-        ItemStack book = createEnchantBook(selected);
+        int level = rollLevel(selected);
+        ItemStack book = createEnchantBook(selected, level);
         player.getInventory().addItem(book);
 
-        player.sendMessage(ChatColor.GREEN + "You received: " + ChatColor.LIGHT_PURPLE + selected.name);
+        player.sendMessage(ChatColor.GREEN + "You received: " + ChatColor.LIGHT_PURPLE + selected.name + " " + toRoman(level));
         return true;
     }
 
     private static EnchantData rollEnchant(Rarity tier) {
-        Random rand = new Random();
 
         Map<Rarity, Double> weights = switch (tier) {
             case COMMON -> Map.of(Rarity.COMMON, 1.0);
@@ -166,7 +192,7 @@ public class EnchantSpinManager {
         ItemMeta meta = book.getItemMeta();
         
         // Display name includes Roman numeral if level > 1
-        String levelSuffix = level > 1 ? " " + toRoman(level) : "";
+        String levelSuffix = " " + toRoman(level); // always show level
         meta.setDisplayName(ChatColor.LIGHT_PURPLE + "" + ChatColor.BOLD + data.name + levelSuffix);
         
         // Lore same as before
@@ -180,7 +206,6 @@ public class EnchantSpinManager {
         }
         lore.add(ChatColor.DARK_GRAY + "Applicable to: " + data.itemType);
         lore.add(data.rarity.display() + " Rarity");
-        if (level > 1) lore.add(ChatColor.AQUA + "Tier: " + toRoman(level));
         lore.add(ChatColor.YELLOW + "Right-click an item to apply.");
         meta.setLore(lore);
         

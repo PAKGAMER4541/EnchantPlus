@@ -23,7 +23,7 @@ public class NetherstrideEffect implements Listener {
 
     @EventHandler
     public void onLavaStep(PlayerMoveEvent event) {
-        // Early exit: only fire when stepping onto new XZ block (PERFORMANCE FIX)
+        // Early exit: only fire when stepping onto new XZ block
         if (event.getFrom().getBlockX() == event.getTo().getBlockX()
                 && event.getFrom().getBlockZ() == event.getTo().getBlockZ()) return;
 
@@ -36,9 +36,19 @@ public class NetherstrideEffect implements Listener {
         // Get level for branching behavior
         int level = EnchantUtils.getEnchantLevel(boots, "netherstride");
 
-        Location below = player.getLocation().clone().subtract(0, 1, 0);
-        Block block = below.getBlock();
-        if (block.getType() != Material.LAVA) return;
+        // Check the block at feet level AND one below — lava detection needs both
+        // because players sink into fluid blocks
+        Block feetBlock = player.getLocation().getBlock();
+        Block belowBlock = player.getLocation().clone().subtract(0, 1, 0).getBlock();
+
+        Block block;
+        if (feetBlock.getType() == Material.LAVA) {
+            block = feetBlock;
+        } else if (belowBlock.getType() == Material.LAVA) {
+            block = belowBlock;
+        } else {
+            return;
+        }
 
         Location loc = block.getLocation();
         if (tempBlocks.contains(loc)) return;
@@ -62,7 +72,7 @@ public class NetherstrideEffect implements Listener {
         }, revertTicks);
     }
 
-    // NEW: Fire damage immunity (Level II+): already handled by onMagmaDamage for HOT_FLOOR
+    // Fire damage immunity (Level II+): already handled by onMagmaDamage for HOT_FLOOR
     // Expand for Level II: also cancel FIRE and FIRE_TICK (but NOT for Inferno Core users)
     @EventHandler
     public void onFireDamage(EntityDamageEvent event) {
@@ -93,7 +103,7 @@ public class NetherstrideEffect implements Listener {
         }
     }
 
-    // NEW: Call this from EnchantPlus.onDisable() to prevent world corruption
+    // Call this from EnchantPlus.onDisable() to prevent world corruption
     public void cleanup() {
         for (Location loc : tempBlocks) {
             Block b = loc.getBlock();

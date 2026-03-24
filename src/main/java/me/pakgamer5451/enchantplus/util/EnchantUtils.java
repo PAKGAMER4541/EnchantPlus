@@ -109,7 +109,7 @@ public class EnchantUtils {
                 EnchantData data = EnchantSpinManager.getEnchantData(id);
                 if (data != null) {
                     int level = getEnchantLevel(item, id);
-                    String levelStr = level > 1 ? " " + toRoman(level) : "";
+                    String levelStr = " " + toRoman(level); // always show level
                     String line = "§7" + data.name + levelStr + " §8[" + data.rarity.display() + "]";
                     if (id.equalsIgnoreCase("soulbound")) {
                         int charges = container.getOrDefault(SOULBOUND_CHARGES_KEY, PersistentDataType.INTEGER, 3);

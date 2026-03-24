@@ -130,3 +130,4 @@ public class EnderShiftEffect implements Listener {
         lastDeathLocations.remove(uuid);
     }
 }
+//feature planning for void spawning a safe platform for void i think thats a good idea 

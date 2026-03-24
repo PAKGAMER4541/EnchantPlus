@@ -73,7 +73,7 @@ public class BlazingAuraEffect implements Listener {
             if (level == 3) {
                 defender.getWorld().getNearbyEntities(defender.getLocation(), 4, 4, 4).forEach(nearby -> {
                     if (nearby instanceof LivingEntity ne 
-                            && !(nearby instanceof Player)   // ← FIX: Exclude players
+                            && !(nearby instanceof Player)
                             && !ne.equals(defender) 
                             && !ne.equals(attacker)) {
                         ne.setFireTicks(60);

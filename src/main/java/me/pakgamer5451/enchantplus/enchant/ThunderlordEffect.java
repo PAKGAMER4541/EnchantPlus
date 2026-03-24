@@ -100,7 +100,7 @@ public class ThunderlordEffect implements Listener {
                     target.getWorld().playSound(target.getLocation(), Sound.ENTITY_ELDER_GUARDIAN_CURSE, 0.3f, 0.8f);
                 }
 
-                // Visual lightning effect (no damage)
+                // Visual lightning effect (no damage) damage only by the effects 
                 target.getWorld().strikeLightningEffect(target.getLocation());
             }
         }.runTaskTimer(EnchantPlus.getInstance(), 0L, 60L); // Every 3 seconds (60 ticks)
@@ -114,7 +114,6 @@ public class ThunderlordEffect implements Listener {
         cancelElectrify(entity.getUniqueId());
     }
 
-    // Static method for PlayerQuitListener cleanup
     public static void cancelElectrify(UUID uuid) {
         BukkitTask task = electrifyTasks.remove(uuid);
         if (task != null) task.cancel();

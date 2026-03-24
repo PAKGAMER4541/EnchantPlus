@@ -138,7 +138,7 @@ public class FarmerBeesEffect implements Listener {
             ItemMeta meta = tool.getItemMeta();
             PersistentDataContainer pdc = meta.getPersistentDataContainer();
             pdc.set(LAST_USE_KEY, PersistentDataType.LONG, System.currentTimeMillis());
-            tool.setItemMeta(meta); // ← FIX: Save the meta!
+            tool.setItemMeta(meta);
             incrementUses(tool);
         }
 
@@ -186,8 +186,6 @@ public class FarmerBeesEffect implements Listener {
     private int getDurabilityCost(ItemStack hoe) {
         ItemMeta meta = hoe.getItemMeta();
         PersistentDataContainer pdc = meta.getPersistentDataContainer();
-
-        // Reset logic removed - now handled by checkAndResetIfNeeded()
 
         int uses = pdc.getOrDefault(USES_KEY, PersistentDataType.INTEGER, 0);
         return (int) Math.pow(2, uses) * 10; // 10, 20, 40, 80, 160...
@@ -273,36 +271,77 @@ public class FarmerBeesEffect implements Listener {
             // Bee work task
             BukkitRunnable beeTask = new BukkitRunnable() {
                 int cropIndex = 0;
+                Location targetLoc = null;
+                boolean roaming = false;
 
                 @Override
                 public void run() {
-                    if (!bee.isValid() || cropIndex >= assignedCrops.size()) {
-                        bee.remove();
+                    if (!bee.isValid()) {
                         cancel();
                         return;
                     }
 
-                    Block target = assignedCrops.get(cropIndex);
-
-                    // Move bee visually toward target
-                    bee.teleport(target.getLocation().add(0.5, 1.0, 0.5));
-
-                    // Bonemeal the target crop (advance growth by 1-2 stages)
-                    if (target.getBlockData() instanceof Ageable ageable) {
-                        int currentAge = ageable.getAge();
-                        int maxAge = ageable.getMaximumAge();
-                        if (currentAge < maxAge) {
-                            ageable.setAge(Math.min(currentAge + 2, maxAge));
-                            target.setBlockData(ageable);
-                            // Bonemeal particle
-                            target.getWorld().spawnParticle(Particle.HAPPY_VILLAGER,
-                                target.getLocation().add(0.5, 0.5, 0.5), 5, 0.3, 0.3, 0.3);
-                        }
+                    // Once all crops are done, switch to roaming mode
+                    if (cropIndex >= assignedCrops.size()) {
+                        roaming = true;
                     }
-                    cropIndex++;
+
+                    if (roaming) {
+                        // Fly randomly around the activation area
+                        if (targetLoc == null || bee.getLocation().distance(targetLoc) < 0.8) {
+                            // Pick a new random point within the activation area
+                            double offsetX = (Math.random() - 0.5) * 8;
+                            double offsetY = Math.random() * 2 + 0.5;
+                            double offsetZ = (Math.random() - 0.5) * 8;
+                            targetLoc = activationLoc.clone().add(offsetX, offsetY, offsetZ);
+                        }
+
+                        Location current = bee.getLocation();
+                        double distance = current.distance(targetLoc);
+                        if (distance > 0.5) {
+                            double speed = 0.15;
+                            double dx = (targetLoc.getX() - current.getX()) / distance * speed;
+                            double dy = (targetLoc.getY() - current.getY()) / distance * speed;
+                            double dz = (targetLoc.getZ() - current.getZ()) / distance * speed;
+                            bee.setVelocity(new org.bukkit.util.Vector(dx, dy, dz));
+                        }
+                        return;
+                    }
+
+                    // Working mode — move toward and tend assigned crops
+                    Block target = assignedCrops.get(cropIndex);
+                    if (targetLoc == null) {
+                        targetLoc = target.getLocation().add(0.5, 1.2, 0.5);
+                    }
+
+                    Location current = bee.getLocation();
+                    double distance = current.distance(targetLoc);
+
+                    if (distance > 0.5) {
+                        double speed = 0.25;
+                        double dx = (targetLoc.getX() - current.getX()) / distance * speed;
+                        double dy = (targetLoc.getY() - current.getY()) / distance * speed;
+                        double dz = (targetLoc.getZ() - current.getZ()) / distance * speed;
+                        bee.setVelocity(new org.bukkit.util.Vector(dx, dy, dz));
+                    } else {
+                        bee.setVelocity(new org.bukkit.util.Vector(0, 0, 0));
+
+                        if (target.getBlockData() instanceof Ageable ageable) {
+                            int currentAge = ageable.getAge();
+                            int maxAge = ageable.getMaximumAge();
+                            if (currentAge < maxAge) {
+                                ageable.setAge(Math.min(currentAge + 2, maxAge));
+                                target.setBlockData(ageable);
+                                target.getWorld().spawnParticle(Particle.HAPPY_VILLAGER,
+                                    target.getLocation().add(0.5, 0.5, 0.5), 5, 0.3, 0.3, 0.3);
+                            }
+                        }
+                        cropIndex++;
+                        targetLoc = null;
+                    }
                 }
             };
-            beeTask.runTaskTimer(EnchantPlus.getInstance(), 0L, 20L); // Every 1 second
+            beeTask.runTaskTimer(EnchantPlus.getInstance(), 0L, 3L); // every 3 ticks for smooth movement
             tasks.add(beeTask);
         }
 
@@ -350,7 +389,7 @@ public class FarmerBeesEffect implements Listener {
                         ActionBarUtil.send(nearby, "§6🐝 Farmer Bees are working! §e" + secondsLeft + "s remaining");
                     }
                 }
-                secondsLeft--;
+                secondsLeft -= 5;
             }
         };
         actionBarTask.runTaskTimer(EnchantPlus.getInstance(), 0L, 100L); // Every 5 seconds

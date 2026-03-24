@@ -70,7 +70,7 @@ public class MidasTouchEffect implements Listener {
             // Visual: Gold sparkle
             block.getWorld().spawnParticle(Particle.FIREWORK, block.getLocation().add(0.5, 0.5, 0.5), 25, 0.3, 0.3, 0.3);
 
-            // Sound: Experience pickup (reward feeling)
+            // Sound: Experience pickup reward wibe , like cute wifu praizing lol
             block.getWorld().playSound(block.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.7f, 1.5f);
         }
     }

@@ -2,8 +2,10 @@ package me.pakgamer5451.enchantplus.enchant;
 
 import me.pakgamer5451.enchantplus.EnchantPlus;
 import me.pakgamer5451.enchantplus.util.EnchantUtils;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.NamespacedKey;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -14,6 +16,8 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.*;
 
 public class SoulboundEffect implements Listener {
@@ -21,6 +25,8 @@ public class SoulboundEffect implements Listener {
     private static final NamespacedKey CHARGES_KEY = new NamespacedKey(EnchantPlus.getInstance(), "soulbound_charges");
     private static final String SOULBOUND_ID = "soulbound";
     private static final Map<UUID, List<ItemStack>> savedSoulboundItems = new HashMap<>();
+    private static final File SOULBOUND_FILE = new File(
+        EnchantPlus.getInstance().getDataFolder(), "soulbound_pending.yml");
 
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
@@ -70,7 +76,45 @@ public class SoulboundEffect implements Listener {
 
         if (!saved.isEmpty()) {
             savedSoulboundItems.put(player.getUniqueId(), saved);
+            savePending(player.getUniqueId(), saved); // persist to disk
         }
+    }
+
+    private static void savePending(UUID uuid, List<ItemStack> items) {
+        List<ItemStack> itemsCopy = new ArrayList<>(items);
+        Bukkit.getScheduler().runTaskAsynchronously(EnchantPlus.getInstance(), () -> {
+            YamlConfiguration yaml = YamlConfiguration.loadConfiguration(SOULBOUND_FILE);
+            yaml.set(uuid.toString(), itemsCopy);
+            try { yaml.save(SOULBOUND_FILE); } 
+            catch (IOException e) {
+                EnchantPlus.getInstance().getLogger().warning("Failed to save soulbound pending: " + e.getMessage());
+            }
+        });
+    }
+
+    private static List<ItemStack> loadPending(UUID uuid) {
+        if (!SOULBOUND_FILE.exists()) return null;
+        YamlConfiguration yaml = YamlConfiguration.loadConfiguration(SOULBOUND_FILE);
+        if (!yaml.contains(uuid.toString())) return null;
+        List<?> raw = yaml.getList(uuid.toString());
+        if (raw == null) return null;
+        List<ItemStack> items = new ArrayList<>();
+        for (Object obj : raw) {
+            if (obj instanceof ItemStack) items.add((ItemStack) obj);
+        }
+        return items.isEmpty() ? null : items;
+    }
+
+    private static void removePending(UUID uuid) {
+        Bukkit.getScheduler().runTaskAsynchronously(EnchantPlus.getInstance(), () -> {
+            if (!SOULBOUND_FILE.exists()) return;
+            YamlConfiguration yaml = YamlConfiguration.loadConfiguration(SOULBOUND_FILE);
+            yaml.set(uuid.toString(), null);
+            try { yaml.save(SOULBOUND_FILE); }
+            catch (IOException e) {
+                EnchantPlus.getInstance().getLogger().warning("Failed to clear soulbound pending: " + e.getMessage());
+            }
+        });
     }
 
     @EventHandler
@@ -79,7 +123,12 @@ public class SoulboundEffect implements Listener {
         UUID uuid = player.getUniqueId();
 
         List<ItemStack> items = savedSoulboundItems.remove(uuid);
+        if (items == null) {
+            // Not in memory — player may have disconnected, check disk
+            items = loadPending(uuid);
+        }
         if (items != null) {
+            removePending(uuid); // clean up disk entry
             for (ItemStack item : items) {
                 Map<Integer, ItemStack> leftover = player.getInventory().addItem(item);
                 for (ItemStack overflow : leftover.values()) {
@@ -120,8 +169,9 @@ public class SoulboundEffect implements Listener {
         return container.getOrDefault(CHARGES_KEY, PersistentDataType.INTEGER, 0);
     }
 
-    // Add this static method so the quit listener can call it
+    // Add this static method so that quit listener can call it
     public static void clearSavedItems(UUID uuid) {
         savedSoulboundItems.remove(uuid);
+        // Do NOT call removePending here — disk entry must survive disconnects
     }
 }

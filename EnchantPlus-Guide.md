@@ -416,7 +416,7 @@ This adds depth and storytelling to each enchantment!
 
 ---
 
-*Last Updated: EnchantPlus v2.0.0 Level System + Critical Bug Fixes*
+*Last Updated: EnchantPlus v2.1.0 Critical Bug Fixes + Performance Enhancements*
 *Total Enchantments: 22 (All with Level I-III variants)*
 *Features: Complete Level System, Performance Optimizations, Bug Fixes*
 *Status: Production Ready*

@@ -27,6 +27,7 @@ import java.util.UUID;
 public class VillagersDealEffect implements Listener {
 
     private static final Map<UUID, Long> discountedVillagers = new HashMap<>();
+    private static final Map<UUID, org.bukkit.scheduler.BukkitRunnable> activeTimers = new HashMap<>();
     private static final NamespacedKey DISCOUNT_KEY = new NamespacedKey(EnchantPlus.getInstance(), "villagers_deal_discount");
     private static final NamespacedKey LOCKED_KEY = new NamespacedKey(EnchantPlus.getInstance(), "villagers_deal_locked");
     private static final NamespacedKey START_TIME_KEY = new NamespacedKey(EnchantPlus.getInstance(), "villagers_deal_start_time");
@@ -119,10 +120,21 @@ public class VillagersDealEffect implements Listener {
     }
 
     private void applyDiscount(Villager villager) {
-        // Check if already discounted
-        if (discountedVillagers.containsKey(villager.getUniqueId())) return;
+        UUID villagerId = villager.getUniqueId();
+        
+        // Cancel existing timer if present
+        org.bukkit.scheduler.BukkitRunnable existingTimer = activeTimers.remove(villagerId);
+        if (existingTimer != null) {
+            existingTimer.cancel();
+        }
 
-        discountedVillagers.put(villager.getUniqueId(), System.currentTimeMillis());
+        // Check if already discounted
+        if (discountedVillagers.containsKey(villagerId)) {
+            // Already discounted — restore original prices first, then reapply fresh
+            restoreDiscount(villager);
+        }
+
+        discountedVillagers.put(villagerId, System.currentTimeMillis());
 
         // Store original prices before modifying
         storeOriginalPrices(villager);
@@ -133,28 +145,34 @@ public class VillagersDealEffect implements Listener {
         pdc.set(START_TIME_KEY, PersistentDataType.LONG, startTime);
 
         // Reduce all recipe prices by 50%, floor at 5 emeralds
-        List<MerchantRecipe> recipes = villager.getRecipes(); // store once
+        List<MerchantRecipe> recipes = villager.getRecipes();
         for (MerchantRecipe recipe : recipes) {
+            // Skip trades where the OUTPUT is emeralds (player selling TO villager)
+            // We only discount trades where the PLAYER PAYS emeralds
             List<ItemStack> ingredients = new ArrayList<>(recipe.getIngredients());
-            if (!ingredients.isEmpty()) {
-                ItemStack ingredient = ingredients.get(0);
-                if (ingredient.getType() == Material.EMERALD) {
-                    int original = ingredient.getAmount();
-                    int discounted = Math.max(5, (int) Math.ceil(original * 0.5));
-                    ingredient.setAmount(discounted);
-                    ingredients.set(0, ingredient);
-                    recipe.setIngredients(ingredients);
+            boolean changed = false;
+            for (int i = 0; i < ingredients.size(); i++) {
+                ItemStack ing = ingredients.get(i);
+                if (ing != null && ing.getType() == Material.EMERALD) {
+                    int original = ing.getAmount();
+                    int discounted = Math.max(1, (int) Math.ceil(original * 0.5));
+                    ing.setAmount(discounted);
+                    ingredients.set(i, ing);
+                    changed = true;
                 }
             }
+            if (changed) {
+                recipe.setIngredients(ingredients);
+            }
         }
-        villager.setRecipes(recipes); // pass the SAME list
+        villager.setRecipes(recipes);
 
         // Floating text above villager using display name temporarily
         villager.setCustomName("§a-50% §7| §e30:00");
         villager.setCustomNameVisible(true);
 
         // Countdown timer updating every 60 seconds, remove after 30 mins
-        new BukkitRunnable() {
+        org.bukkit.scheduler.BukkitRunnable timer = new org.bukkit.scheduler.BukkitRunnable() {
             int minutesLeft = 29;
             @Override
             public void run() {
@@ -167,61 +185,72 @@ public class VillagersDealEffect implements Listener {
                 villager.setCustomName("§a-50% §7| §e" + minutesLeft + ":00");
                 minutesLeft--;
             }
-        }.runTaskTimer(EnchantPlus.getInstance(), 1200L, 1200L); // every 60 seconds
+        };
+        timer.runTaskTimer(EnchantPlus.getInstance(), 1200L, 1200L); // every 60 seconds
+        activeTimers.put(villagerId, timer);
     }
 
     private void storeOriginalPrices(Villager villager) {
         PersistentDataContainer pdc = villager.getPersistentDataContainer();
         StringBuilder prices = new StringBuilder();
-        
-        for (MerchantRecipe recipe : villager.getRecipes()) {
-            List<ItemStack> ingredients = recipe.getIngredients();
-            if (!ingredients.isEmpty()) {
-                ItemStack ingredient = ingredients.get(0);
-                if (ingredient.getType() == Material.EMERALD) {
-                    if (prices.length() > 0) prices.append(",");
-                    prices.append(ingredient.getAmount());
+        List<MerchantRecipe> recipes = villager.getRecipes();
+        for (int r = 0; r < recipes.size(); r++) {
+            List<ItemStack> ingredients = recipes.get(r).getIngredients();
+            for (int i = 0; i < ingredients.size(); i++) {
+                ItemStack ing = ingredients.get(i);
+                if (ing != null && ing.getType() == Material.EMERALD) {
+                    if (prices.length() > 0) prices.append(";");
+                    prices.append(r).append(":").append(i).append(":").append(ing.getAmount());
                 }
             }
         }
-        
         pdc.set(DISCOUNT_KEY, PersistentDataType.STRING, prices.toString());
     }
 
     private void restoreDiscount(Villager villager) {
-        discountedVillagers.remove(villager.getUniqueId());
+        UUID villagerId = villager.getUniqueId();
+        discountedVillagers.remove(villagerId);
+        activeTimers.remove(villagerId);
         villager.setCustomName(null);
         villager.setCustomNameVisible(false);
         
         // Restore original prices from PDC
         PersistentDataContainer pdc = villager.getPersistentDataContainer();
         String pricesStr = pdc.get(DISCOUNT_KEY, PersistentDataType.STRING);
-        if (pricesStr != null) {
-            String[] prices = pricesStr.split(",");
+        if (pricesStr != null && !pricesStr.isEmpty()) {
             List<MerchantRecipe> recipes = villager.getRecipes();
-            int priceIndex = 0;
-            
-            for (MerchantRecipe recipe : recipes) {
-                List<ItemStack> ingredients = new ArrayList<>(recipe.getIngredients());
-                if (!ingredients.isEmpty() && priceIndex < prices.length) {
-                    ItemStack ingredient = ingredients.get(0);
-                    if (ingredient.getType() == Material.EMERALD) {
-                        try {
-                            int originalPrice = Integer.parseInt(prices[priceIndex]);
-                            ingredient.setAmount(originalPrice);
-                            ingredients.set(0, ingredient);
-                            recipe.setIngredients(ingredients);
-                            priceIndex++;
-                        } catch (NumberFormatException e) {
-                            // Skip invalid price data
-                        }
-                    }
-                }
+            for (String entry : pricesStr.split(";")) {
+                String[] parts = entry.split(":");
+                if (parts.length != 3) continue;
+                try {
+                    int recipeIdx = Integer.parseInt(parts[0]);
+                    int ingIdx = Integer.parseInt(parts[1]);
+                    int amount = Integer.parseInt(parts[2]);
+                    if (recipeIdx >= recipes.size()) continue;
+                    MerchantRecipe recipe = recipes.get(recipeIdx);
+                    List<ItemStack> ingredients = new ArrayList<>(recipe.getIngredients());
+                    if (ingIdx >= ingredients.size()) continue;
+                    ingredients.get(ingIdx).setAmount(amount);
+                    recipe.setIngredients(ingredients);
+                } catch (NumberFormatException ignored) {}
             }
-            
             villager.setRecipes(recipes);
             pdc.remove(DISCOUNT_KEY);
             pdc.remove(START_TIME_KEY);
+        }
+    }
+
+    @EventHandler
+    public void onVillagerDeath(org.bukkit.event.entity.EntityDeathEvent event) {
+        if (!(event.getEntity() instanceof Villager villager)) return;
+        
+        UUID villagerId = villager.getUniqueId();
+        if (discountedVillagers.containsKey(villagerId)) {
+            discountedVillagers.remove(villagerId);
+            org.bukkit.scheduler.BukkitRunnable timer = activeTimers.remove(villagerId);
+            if (timer != null) {
+                timer.cancel();
+            }
         }
     }
 

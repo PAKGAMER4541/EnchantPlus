@@ -83,3 +83,4 @@ public class AutoReplantEffect implements Listener {
         }.runTaskLater(EnchantPlus.getInstance(), 1L);
     }
 }
+// i think too OP lol maybe 

@@ -5,6 +5,7 @@ import me.pakgamer5451.enchantplus.enchant.*;
 import me.pakgamer5451.enchantplus.gui.EnchantGalleryGUI;
 import me.pakgamer5451.enchantplus.gui.MainMenuGUI;
 import me.pakgamer5451.enchantplus.gui.SpinMenuGUI;
+import me.pakgamer5451.enchantplus.listener.AnvilCombineListener;
 import me.pakgamer5451.enchantplus.listener.GalaxyEnchanterListener;
 import me.pakgamer5451.enchantplus.listener.InventoryClickListener;
 import me.pakgamer5451.enchantplus.listener.PlayerPlacedBlockTracker;
@@ -47,6 +48,7 @@ public class EnchantPlus extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new SpinMenuGUI(), this);
         getServer().getPluginManager().registerEvents(new EnchantGalleryGUI(), this);
         getServer().getPluginManager().registerEvents(new PlayerQuitListener(), this);
+        getServer().getPluginManager().registerEvents(new AnvilCombineListener(), this);
 
         // Register enchant effect listeners
         getServer().getPluginManager().registerEvents(new PlayerPlacedBlockTracker(), this);

@@ -135,3 +135,4 @@ public class InfernoCoreEffect implements Listener {
         if (task != null) task.cancel();
     }
 }
+//personally too op , maybe i should disbale this one 

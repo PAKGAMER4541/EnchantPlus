@@ -18,13 +18,13 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.PotionMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.potion.PotionType;
 import java.util.Set;
 
 import java.util.List;
-
-// ... (keep your existing imports)
 
 public class InventoryClickListener implements Listener {
 
@@ -106,6 +106,21 @@ public class InventoryClickListener implements Listener {
             return;
         }
 
+        // Lock Villager's Deal potions to prevent further brewing
+        if (enchantId.equals("villagers_deal") && clicked.getType() == Material.SPLASH_POTION) {
+            // Only allow on Splash Potion of Instant Healing
+            org.bukkit.inventory.meta.PotionMeta potionMeta = 
+                (org.bukkit.inventory.meta.PotionMeta) clicked.getItemMeta();
+            // Check if it's an instant healing potion using the potion type key
+            if (potionMeta.getBasePotionType() == null || 
+                !potionMeta.getBasePotionType().getKey().toString().equals("minecraft:instant_heal")) {
+                player.sendMessage(ChatColor.RED + "❌ Villager's Deal can only be applied to a " +
+                    ChatColor.YELLOW + "Splash Potion of Instant Healing" + ChatColor.RED + ".");
+                event.setCancelled(true);
+                return;
+            }
+        }
+
         // Apply: addEnchant handles the enchant ID storage (already exists, just updating level)
         if (!existingEnchants.contains(enchantId)) {
             EnchantUtils.addEnchant(clicked, enchantId); // adds the base enchant
@@ -118,7 +133,7 @@ public class InventoryClickListener implements Listener {
             (bookLevel > 1 ? " " + toRoman(bookLevel) : "") +
             ChatColor.GREEN + " to your item!");
 
-        // Lock Villager's Deal potions to prevent further brewing
+        // Lock potion after successful application
         if (enchantId.equals("villagers_deal") && clicked.getType() == Material.SPLASH_POTION) {
             VillagersDealEffect.lockPotion(clicked);
         }

@@ -132,7 +132,19 @@ public class SpinMenuGUI implements Listener {
                     cancel();
                     spinningPlayers.remove(player.getUniqueId());
 
-                    ItemStack reward = options.get(random.nextInt(options.size()));
+                    ItemStack reward;
+                    if (random.nextDouble() < 0.25) {
+                        reward = new ItemStack(Material.BARRIER);
+                        ItemMeta meta = reward.getItemMeta();
+                        meta.setDisplayName("§cNo Reward");
+                        meta.setLore(List.of("§7Better luck next time."));
+                        reward.setItemMeta(meta);
+                    } else {
+                        List<EnchantSpinManager.EnchantData> possible = EnchantSpinManager.getPossibleEnchantsForSpin(rarity);
+                        EnchantSpinManager.EnchantData winnerData = possible.get(random.nextInt(possible.size()));
+                        int level = EnchantSpinManager.rollLevel(winnerData);
+                        reward = EnchantSpinManager.createEnchantBook(winnerData, level);
+                    }
                     spinGui.setItem(13, reward);
 
                     new BukkitRunnable() {

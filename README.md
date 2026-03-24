@@ -62,17 +62,7 @@ All permissions default to **op**.
 2. Drop it into your `plugins/` folder
 3. Restart your server
 4. Optionally install FancyNpcs and use `/spawnenchanter` to place the NPC
-```
 
-**Step 6 — Commit message when you push the new code:**
-> `v2.0 — Complete rewrite: 19 enchants, level system, bug fixes, production ready`
-
-**Step 7 — Create a Release** (optional but makes it look professional):
-- On your repo page, click **Releases** on the right → **Create a new release**
-- Tag: `v2.0`
-- Title: `EnchantPlus v2.0`
-- Description: paste the changelog below
-```
 ## What's new in v2.0
 
 ### New enchants
